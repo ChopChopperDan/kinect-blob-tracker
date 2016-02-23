@@ -1,0 +1,35 @@
+service edu.rpi.cats.sensors.camera_interface
+
+option version 0.5
+
+struct Image
+    field int32 width
+    field int32 height
+    field int32 channels
+    field uint8[] data
+end struct
+
+struct Image16
+    field int32 width
+    field int32 height
+    field int32 channels
+    field uint16[] data
+end struct
+
+struct ImageHeader
+    field int32 width
+    field int32 height
+    field int32 channels
+    field uint8 step
+end struct
+
+object Camera
+    function Image getCurrentImage()
+    
+    function ImageHeader getImageHeader()
+    
+    function void StartStreaming()
+    function void StopStreaming()
+    
+    pipe Image ImageStream
+end object

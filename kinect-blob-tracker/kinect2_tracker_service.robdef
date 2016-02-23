@@ -1,0 +1,30 @@
+service edu.rpi.cats.sensors.kinect2_tracker
+import edu.rpi.cats.sensors.camera_interface
+
+option version 0.5
+
+struct HandData
+    field uint16 color_x
+    field uint16 color_y
+    field uint16 depth_x
+    field uint16 depth_y
+    field double x
+    field double y
+    field double z
+end struct
+
+object HandTracker
+	    
+    function uint8 EnableSensors()
+    function uint8 DisableSensors()
+    	
+	function edu.rpi.cats.sensors.camera_interface.ImageHeader getImageHeader()
+	function edu.rpi.cats.sensors.camera_interface.ImageHeader getDepthImageHeader()
+	
+	function edu.rpi.cats.sensors.camera_interface.Image getCurrentImage()
+	function edu.rpi.cats.sensors.camera_interface.Image16 getCurrentDepthImage()
+    
+    function HandData getLeftHand()
+    function HandData getRightHand()
+	
+end object
