@@ -13,15 +13,16 @@ Kinect2_impl::Kinect2_impl() : edu::rpi::cats::sensors::kinect2_tracker::HandTra
 	// Allocate memory for the different image streams
 	this->depth_image_data = new uint16_t[this->depth_image_width * this->depth_image_height];
 	this->color_image_data = new RGBQUAD[this->color_image_width * this->color_image_height];
-	this->color_points_in_depth_frame = new DepthSpacePoint[this->color_image_width * this->color_image_height];
+	//this->color_points_in_depth_frame = new DepthSpacePoint[this->color_image_width * this->color_image_height];
+	this->color_points_in_camera_frame = new CameraSpacePoint[this->color_image_width * this->color_image_height];
 
-	this->left_color_point = ColorSpacePoint();
-	this->left_depth_point = DepthSpacePoint();
-	this->left_point = CameraSpacePoint();
+	this->left_color_center = ColorSpacePoint();
+	this->left_depth_center = DepthSpacePoint();
+	this->left_center = CameraSpacePoint();
 
-	this->right_color_point = ColorSpacePoint();
-	this->right_depth_point = DepthSpacePoint();
-	this->right_point = CameraSpacePoint();
+	this->right_color_center = ColorSpacePoint();
+	this->right_depth_center = DepthSpacePoint();
+	this->right_center = CameraSpacePoint();
 
 	t1 = boost::thread(boost::bind(&Kinect2_impl::backgroundPollingThread, this));
 
@@ -202,13 +203,13 @@ RR_SHARED_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandData >  Kinect2_impl
 
 	RR_SHARED_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandData> H(new edu::rpi::cats::sensors::kinect2_tracker::HandData());
 
-	H->color_x = this->left_color_point.X;
-	H->color_y = this->left_color_point.Y;
-	H->depth_x = this->left_depth_point.X;
-	H->depth_y = this->left_depth_point.Y;
-	H->x = this->left_point.X;
-	H->y = this->left_point.Y;
-	H->z = this->left_point.Z;
+	H->color_x = this->left_color_center.X;
+	H->color_y = this->left_color_center.Y;
+	H->depth_x = this->left_depth_center.X;
+	H->depth_y = this->left_depth_center.Y;
+	H->x = this->left_center.X;
+	H->y = this->left_center.Y;
+	H->z = this->left_center.Z;
 
 	return H;
 }
@@ -219,45 +220,46 @@ RR_SHARED_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandData >  Kinect2_impl
 
 	RR_SHARED_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandData> H(new edu::rpi::cats::sensors::kinect2_tracker::HandData());
 
-	H->color_x = this->right_color_point.X;
-	H->color_y = this->right_color_point.Y;
-	H->depth_x = this->right_depth_point.X;
-	H->depth_y = this->right_depth_point.Y;
-	H->x = this->right_point.X;
-	H->y = this->right_point.Y;
-	H->z = this->right_point.Z;
+	H->color_x = this->right_color_center.X;
+	H->color_y = this->right_color_center.Y;
+	H->depth_x = this->right_depth_center.X;
+	H->depth_y = this->right_depth_center.Y;
+	H->x = this->right_center.X;
+	H->y = this->right_center.Y;
+	H->z = this->right_center.Z;
 
 	return H;
 }
 
 int Kinect2_impl::FindHandCentersInColorImage()
 {
-	//uint8_t *color_image_data_processing = new uint8_t[this->color_image_width * this->color_image_height * 4];
-	//memcpy(color_image_data_processing, this->color_image_data, this->color_image_width * this->color_image_height * sizeof(RGBQUAD));
-	//cv::Mat color_image_mat = cv::Mat(this->color_image_height, this->color_image_width, CV_8UC4, color_image_data_processing);
+	// Set up cv::Mat wrapper around color image data and convert to BGR format
 	cv::Mat color_image_mat = cv::Mat(this->color_image_height, this->color_image_width, CV_8UC4, this->color_image_data);
 	cv::Mat color_image_bgr;
 	cv::cvtColor(color_image_mat, color_image_bgr, CV_BGRA2BGR);
 
+	// Convert from BGR to HSV
 	cv::Mat color_image_hsv, color_image_hsv_thresh;
 	cv::cvtColor(color_image_bgr, color_image_hsv, CV_BGR2HSV);
 
+	// Threshold and segment out bluish-purple color
 	cv::inRange(color_image_hsv, cv::Scalar(100, 100, 128), cv::Scalar(110, 200, 255), color_image_hsv_thresh);
 	cv::erode(color_image_hsv_thresh, color_image_hsv_thresh, cv::Mat());
 	cv::dilate(color_image_hsv_thresh, color_image_hsv_thresh, cv::Mat());
 
 	color_image_mat.release();
-	//delete[] color_image_data_processing;
 
+	// Display thresholded color image
 	cv::Mat thresh_resize;
 	cv::resize(color_image_hsv_thresh, thresh_resize, cv::Size(), 0.25, 0.25);
 	cv::imshow("thresh", thresh_resize);
 	cv::waitKey(30);
 
-	//std::cout << "Extracting hand locations" << std::endl;
+	// Detect connected components and stats about each particular label
 	cv::Mat cc_labels, cc_stats, cc_centroids;
 	int n_cc = cv::connectedComponentsWithStats(color_image_hsv_thresh, cc_labels, cc_stats, cc_centroids);
 	
+	// Find largest two blobs (not counting the background)
 	if (n_cc >= 3)
 	{
 		int max_a1 = 0, max_a2 = 0;
@@ -277,21 +279,49 @@ int Kinect2_impl::FindHandCentersInColorImage()
 				max_i2 = i;
 			}
 		}
-
+		// Determine which blob is associated with the left or right hand
+		int left_i, right_i;
 		if (cc_centroids.at<double>(max_i1, 0) < cc_centroids.at<double>(max_i2, 0))
 		{
-			this->left_color_point.X = cc_centroids.at<double>(max_i1, 0);
-			this->left_color_point.Y = cc_centroids.at<double>(max_i1, 1);
-			this->right_color_point.X = cc_centroids.at<double>(max_i2, 0);
-			this->right_color_point.Y = cc_centroids.at<double>(max_i2, 1);
+			left_i = max_i1;
+			right_i = max_i2;
 		}
 		else
 		{
-			this->left_color_point.X = cc_centroids.at<double>(max_i2, 0);
-			this->left_color_point.Y = cc_centroids.at<double>(max_i2, 1);
-			this->right_color_point.X = cc_centroids.at<double>(max_i1, 0);
-			this->right_color_point.Y = cc_centroids.at<double>(max_i1, 1);
+			left_i = max_i2;
+			right_i = max_i1;
 		}
+
+		// Save detected centroids of each blob and associated pixels for each blob
+		this->left_color_center.X = cc_centroids.at<double>(left_i, 0);
+		this->left_color_center.Y = cc_centroids.at<double>(left_i, 1);
+		this->right_color_center.X = cc_centroids.at<double>(right_i, 0);
+		this->right_color_center.Y = cc_centroids.at<double>(right_i, 1);
+
+		this->left_color_points.clear();
+		for (int i = cc_stats.at<int>(left_i, cv::CC_STAT_TOP);
+			i < cc_stats.at<int>(left_i, cv::CC_STAT_TOP) + cc_stats.at<int>(left_i, cv::CC_STAT_HEIGHT); i++)
+		{
+			for (int j = cc_stats.at<int>(left_i, cv::CC_STAT_LEFT);
+				j < cc_stats.at<int>(left_i, cv::CC_STAT_LEFT) + cc_stats.at<int>(left_i, cv::CC_STAT_LEFT); j++)
+			{
+				if (cc_labels.at<int>(i, j) == left_i)
+					this->left_color_points.push_back(cv::Point(j, i));
+			}
+		}
+
+		this->right_color_points.clear();
+		for (int i = cc_stats.at<int>(right_i, cv::CC_STAT_TOP);
+			i < cc_stats.at<int>(right_i, cv::CC_STAT_TOP) + cc_stats.at<int>(right_i, cv::CC_STAT_HEIGHT); i++)
+		{
+			for (int j = cc_stats.at<int>(right_i, cv::CC_STAT_LEFT);
+				j < cc_stats.at<int>(right_i, cv::CC_STAT_LEFT) + cc_stats.at<int>(right_i, cv::CC_STAT_LEFT); j++)
+			{
+				if (cc_labels.at<int>(i, j) == right_i)
+					this->right_color_points.push_back(cv::Point(j, i));
+			}
+		}
+
 	}
 	else
 		return -1;
@@ -301,24 +331,75 @@ int Kinect2_impl::FindHandCentersInColorImage()
 
 int Kinect2_impl::MapHandCentersToDepthImage()
 {
-	UINT left_color_idx, right_color_idx;
+	/*UINT left_color_idx, right_color_idx;
 	UINT left_depth_idx, right_depth_idx;
+	UINT n_points;
 
 	// Left point
-	left_color_idx = (UINT)(this->left_color_point.Y) * (UINT)(this->color_image_width) + (UINT)this->left_color_point.X;
-	this->left_depth_point = this->color_points_in_depth_frame[left_color_idx];
-	left_depth_idx = (UINT)(this->left_depth_point.Y) * (UINT)(this->depth_image_width) + (UINT)this->left_depth_point.X;
+	left_color_idx = (UINT)(this->left_color_center.Y) * (UINT)(this->color_image_width) + (UINT)this->left_color_center.X;
+	this->left_depth_center = this->color_points_in_depth_frame[left_color_idx];
+	left_depth_idx = (UINT)(this->left_depth_center.Y) * (UINT)(this->depth_image_width) + (UINT)this->left_depth_center.X;
 	if ((left_depth_idx < 0) || (left_depth_idx >= this->depth_image_height * this->depth_image_width))
 		return -1;
-	this->coordinate_mapper->MapDepthPointToCameraSpace(this->color_points_in_depth_frame[left_color_idx], this->depth_image_data[left_depth_idx], &this->left_point);
+	this->coordinate_mapper->MapDepthPointToCameraSpace(this->color_points_in_depth_frame[left_color_idx], this->depth_image_data[left_depth_idx], &this->left_center);
 
 	// Right point
-	right_color_idx = (UINT)(this->right_color_point.Y) * (UINT)(this->color_image_width) + (UINT)this->right_color_point.X;
-	this->right_depth_point = this->color_points_in_depth_frame[right_color_idx];
-	right_depth_idx = (UINT)(this->right_depth_point.Y) * (UINT)(this->depth_image_width) + (UINT)this->right_depth_point.X;
+	right_color_idx = (UINT)(this->right_color_center.Y) * (UINT)(this->color_image_width) + (UINT)this->right_color_center.X;
+	this->right_depth_center = this->color_points_in_depth_frame[right_color_idx];
+	right_depth_idx = (UINT)(this->right_depth_center.Y) * (UINT)(this->depth_image_width) + (UINT)this->right_depth_center.X;
 	if ((right_depth_idx < 0) || (right_depth_idx >= this->depth_image_height * this->depth_image_width))
 		return -1;
-	this->coordinate_mapper->MapDepthPointToCameraSpace(this->color_points_in_depth_frame[right_color_idx], this->depth_image_data[right_depth_idx], &this->right_point);
+	this->coordinate_mapper->MapDepthPointToCameraSpace(this->color_points_in_depth_frame[right_color_idx], this->depth_image_data[right_depth_idx], &this->right_center);
+	*/
+	return 0;
+}
+
+int Kinect2_impl::MapBlobsToCameraSpace()
+{
+
+	this->left_center = CameraSpacePoint();
+	this->right_center = CameraSpacePoint();
+	int n_points = this->left_color_points.size();
+
+	for (int i = 0; i < this->left_color_points.size(); i++)
+	{
+		int k = (UINT)(this->left_color_points.at(i).y) * (UINT)(this->color_image_width) + (UINT)this->left_color_points.at(i).x;
+		if (this->color_points_in_camera_frame[k].Z >= 0.4 && this->color_points_in_camera_frame[k].Z <= 4)
+		{
+			this->left_center.X += this->color_points_in_camera_frame[k].X;
+			this->left_center.Y += this->color_points_in_camera_frame[k].Y;
+			this->left_center.Z += this->color_points_in_camera_frame[k].Z;
+		}
+		else
+			n_points--;
+	}
+
+	if (n_points == 0)
+		return -1;
+	this->left_center.X /= n_points;
+	this->left_center.Y /= n_points;
+	this->left_center.Z /= n_points;
+
+	n_points = this->right_color_points.size();
+	for (int i = 0; i < this->right_color_points.size(); i++)
+	{
+		int k = (UINT)(this->right_color_points.at(i).y) * (UINT)(this->color_image_width) + (UINT)this->right_color_points.at(i).x;
+		if (this->color_points_in_camera_frame[k].Z >= 0.4 && this->color_points_in_camera_frame[k].Z <= 4)
+		{
+			this->right_center.X += this->color_points_in_camera_frame[k].X;
+			this->right_center.Y += this->color_points_in_camera_frame[k].Y;
+			this->right_center.Z += this->color_points_in_camera_frame[k].Z;
+		}
+		else
+			n_points--;
+	}
+
+	if (n_points == 0)
+		return -1;
+
+	this->right_center.X /= n_points;
+	this->right_center.Y /= n_points;
+	this->right_center.Z /= n_points;
 
 	return 0;
 }
@@ -384,30 +465,32 @@ void Kinect2_impl::MultiSourceFrameArrived(IMultiSourceFrameArrivedEventArgs* pA
 	if (color_frame_acquired && depth_frame_acquired)
 	{
 		//std::cout << "Attempting to map color frame into depth space...";
-		hr = this->coordinate_mapper->MapColorFrameToDepthSpace(this->depth_image_height * this->depth_image_width, this->depth_image_data,
-																this->color_image_height * this->color_image_width, this->color_points_in_depth_frame);
+		//hr = this->coordinate_mapper->MapColorFrameToDepthSpace(this->depth_image_height * this->depth_image_width, this->depth_image_data,
+		//	this->color_image_height * this->color_image_width, this->color_points_in_depth_frame);
+		hr = this->coordinate_mapper->MapColorFrameToCameraSpace(this->depth_image_height * this->depth_image_width, this->depth_image_data,
+														this->color_image_height * this->color_image_width, this->color_points_in_camera_frame);
 		//std::cout << ((SUCCEEDED(hr)) ? "Success" : "Failed") << std::endl;
 		if (FindHandCentersInColorImage() < 0)
 		{
-			this->left_color_point = ColorSpacePoint();
-			this->left_depth_point = DepthSpacePoint();
-			this->left_point = CameraSpacePoint();
+			this->left_color_center = ColorSpacePoint();
+			this->left_depth_center = DepthSpacePoint();
+			this->left_center = CameraSpacePoint();
 
-			this->right_color_point = ColorSpacePoint();
-			this->right_depth_point = DepthSpacePoint();
-			this->right_point = CameraSpacePoint();
+			this->right_color_center = ColorSpacePoint();
+			this->right_depth_center = DepthSpacePoint();
+			this->right_center = CameraSpacePoint();
 		}
 		else
 		{
-			if (MapHandCentersToDepthImage() < 0)
+			if (MapBlobsToCameraSpace() < 0)
 			{
-				this->left_color_point = ColorSpacePoint();
-				this->left_depth_point = DepthSpacePoint();
-				this->left_point = CameraSpacePoint();
+				this->left_color_center = ColorSpacePoint();
+				this->left_depth_center = DepthSpacePoint();
+				this->left_center = CameraSpacePoint();
 
-				this->right_color_point = ColorSpacePoint();
-				this->right_depth_point = DepthSpacePoint();
-				this->right_point = CameraSpacePoint();
+				this->right_color_center = ColorSpacePoint();
+				this->right_depth_center = DepthSpacePoint();
+				this->right_center = CameraSpacePoint();
 			}
 		}
 

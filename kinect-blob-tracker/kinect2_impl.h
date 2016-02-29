@@ -54,21 +54,24 @@ private:
 	int color_image_width, color_image_height;
 	int depth_image_width, depth_image_height;
 
-	ColorSpacePoint left_color_point, right_color_point;
-	DepthSpacePoint left_depth_point, right_depth_point;
-	CameraSpacePoint left_point, right_point;
+	ColorSpacePoint left_color_center, right_color_center;
+	std::vector<cv::Point> left_color_points, right_color_points;
+	DepthSpacePoint left_depth_center, right_depth_center;
+	CameraSpacePoint left_center, right_center;
 
 	
 	IKinectSensor *kinect;
 	ICoordinateMapper *coordinate_mapper;
 	IMultiSourceFrameReader *multi_reader;
-	DepthSpacePoint *color_points_in_depth_frame;
+	//DepthSpacePoint *color_points_in_depth_frame;
+	CameraSpacePoint *color_points_in_camera_frame;
 	WAITABLE_HANDLE h_event;
 	boost::mutex mtx_;
 	boost::thread t1;
 
 	int FindHandCentersInColorImage();
 	int MapHandCentersToDepthImage();
+	int MapBlobsToCameraSpace();
 	void MultiSourceFrameArrived(IMultiSourceFrameArrivedEventArgs* pArgs);
 
 	void backgroundPollingThread();
