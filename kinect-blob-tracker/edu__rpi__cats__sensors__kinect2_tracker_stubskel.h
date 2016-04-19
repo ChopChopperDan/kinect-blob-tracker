@@ -58,6 +58,24 @@ uint8_t async_DisableSensors(boost::asio::yield_context rr_yield, int32_t rr_tim
 }
 #endif
 
+virtual void async_start_recording(std::string record_name,boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout=RR_TIMEOUT_INFINITE) = 0;
+
+#ifdef ROBOTRACONTEUR_USE_ASIO_SPAWN
+virtual void async_start_recording(std::string record_name,boost::asio::yield_context rr_yield, int32_t rr_timeout=RR_TIMEOUT_INFINITE)
+{
+    RobotRaconteur::detail::async_wrap_for_spawn_void(boost::bind((void (async_HandTracker::*)(std::string,boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>)>,int32_t))&async_HandTracker::async_start_recording, this, boost::ref(record_name),_1,rr_timeout), rr_yield);
+}
+#endif
+
+virtual void async_stop_recording(boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout=RR_TIMEOUT_INFINITE) = 0;
+
+#ifdef ROBOTRACONTEUR_USE_ASIO_SPAWN
+virtual void async_stop_recording(boost::asio::yield_context rr_yield, int32_t rr_timeout=RR_TIMEOUT_INFINITE)
+{
+    RobotRaconteur::detail::async_wrap_for_spawn_void(boost::bind((void (async_HandTracker::*)(boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>)>,int32_t))&async_HandTracker::async_stop_recording, this, _1,rr_timeout), rr_yield);
+}
+#endif
+
 virtual void async_getImageHeader(boost::function<void (RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader >, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout=RR_TIMEOUT_INFINITE) = 0;
 
 #ifdef ROBOTRACONTEUR_USE_ASIO_SPAWN
@@ -123,6 +141,10 @@ virtual uint8_t EnableSensors();
 
 virtual uint8_t DisableSensors();
 
+virtual void start_recording(std::string record_name);
+
+virtual void stop_recording();
+
 virtual RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > getImageHeader();
 
 virtual RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > getDepthImageHeader();
@@ -151,6 +173,16 @@ virtual void async_DisableSensors(boost::function<void (uint8_t, RR_SHARED_PTR<R
 
 protected:
 virtual void rrend_DisableSensors(RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, boost::function< void (uint8_t ,RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > handler);
+public:
+virtual void async_start_recording(std::string record_name,boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout=RR_TIMEOUT_INFINITE);
+
+protected:
+virtual void rrend_start_recording(RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, boost::function< void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > handler);
+public:
+virtual void async_stop_recording(boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout=RR_TIMEOUT_INFINITE);
+
+protected:
+virtual void rrend_stop_recording(RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, boost::function< void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > handler);
 public:
 virtual void async_getImageHeader(boost::function<void (RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader >, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout=RR_TIMEOUT_INFINITE);
 
@@ -230,6 +262,8 @@ virtual RR_SHARED_PTR<edu::rpi::cats::sensors::kinect2_tracker::async_HandTracke
 protected:
 static void rr_EnableSensors(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, uint8_t ret, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep);
 static void rr_DisableSensors(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, uint8_t ret, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep);
+static void rr_start_recording(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep);
+static void rr_stop_recording(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep);
 static void rr_getImageHeader(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > ret, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep);
 static void rr_getDepthImageHeader(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > ret, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep);
 static void rr_getCurrentImage(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::Image > ret, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep);

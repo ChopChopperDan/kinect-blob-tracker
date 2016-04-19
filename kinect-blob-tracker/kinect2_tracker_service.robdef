@@ -17,6 +17,9 @@ object HandTracker
 	    
     function uint8 EnableSensors()
     function uint8 DisableSensors()
+    
+    function void start_recording(string record_name)
+    function void stop_recording()
     	
 	function edu.rpi.cats.sensors.camera_interface.ImageHeader getImageHeader()
 	function edu.rpi.cats.sensors.camera_interface.ImageHeader getDepthImageHeader()

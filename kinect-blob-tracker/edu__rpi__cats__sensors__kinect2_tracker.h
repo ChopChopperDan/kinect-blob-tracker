@@ -39,6 +39,10 @@ virtual uint8_t EnableSensors()=0;
 
 virtual uint8_t DisableSensors()=0;
 
+virtual void start_recording(std::string record_name)=0;
+
+virtual void stop_recording()=0;
+
 virtual RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > getImageHeader()=0;
 
 virtual RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > getDepthImageHeader()=0;

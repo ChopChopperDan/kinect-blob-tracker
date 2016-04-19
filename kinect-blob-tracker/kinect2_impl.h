@@ -17,6 +17,9 @@
 #include <string>
 #include <cmath>
 
+#include <boost/filesystem.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
 #include <boost/enable_shared_from_this.hpp>
 #include <map>
 
@@ -35,6 +38,10 @@ public:
 
 	virtual uint8_t EnableSensors();
 	virtual uint8_t DisableSensors();
+
+
+	virtual void start_recording(std::string record_name);
+	virtual void stop_recording();
 
 	virtual RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > getImageHeader();
 	virtual RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > getDepthImageHeader();
@@ -59,6 +66,12 @@ private:
 	DepthSpacePoint left_depth_center, right_depth_center;
 	CameraSpacePoint left_center, right_center;
 
+	bool _recording;
+	int record_idx;
+	std::string record_base;
+	std::ofstream record_file;
+	boost::posix_time::ptime record_t0;
+
 	
 	IKinectSensor *kinect;
 	ICoordinateMapper *coordinate_mapper;
@@ -75,6 +88,7 @@ private:
 	void MultiSourceFrameArrived(IMultiSourceFrameArrivedEventArgs* pArgs);
 
 	void backgroundPollingThread();
+	void write_data();
 
 	template<class Interface> inline void SafeRelease(Interface *& pInterfaceToRelease)
 	{

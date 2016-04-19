@@ -44,6 +44,9 @@ std::string out(
 "function uint8 EnableSensors()\n"
 "function uint8 DisableSensors()\n"
 "\n"
+"function void start_recording(string record_name)\n"
+"function void stop_recording()\n"
+"\n"
 "function edu.rpi.cats.sensors.camera_interface.ImageHeader getImageHeader()\n"
 "function edu.rpi.cats.sensors.camera_interface.ImageHeader getDepthImageHeader()\n"
 "\n"
@@ -172,6 +175,19 @@ RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_req=RR_MAKE_SHARED<RobotRaconteur
 RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_ret=ProcessTransaction(rr_req);
 RR_SHARED_PTR<RobotRaconteur::MessageElement> rr_me=rr_ret->FindElement("return");
 return RobotRaconteur::RRArrayToScalar<uint8_t >(rr_me->CastData<RobotRaconteur::RRArray<uint8_t > >());
+}
+
+void HandTracker_stub::start_recording(std::string record_name)
+{
+RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_req=RR_MAKE_SHARED<RobotRaconteur::MessageEntry>(RobotRaconteur::MessageEntryType_FunctionCallReq,"start_recording");
+rr_req->AddElement(RR_MAKE_SHARED<RobotRaconteur::MessageElement>("record_name",RobotRaconteur::rr_cast<RobotRaconteur::MessageElementData>(RobotRaconteur::stringToRRArray(record_name))));
+RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_ret=ProcessTransaction(rr_req);
+}
+
+void HandTracker_stub::stop_recording()
+{
+RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_req=RR_MAKE_SHARED<RobotRaconteur::MessageEntry>(RobotRaconteur::MessageEntryType_FunctionCallReq,"stop_recording");
+RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_ret=ProcessTransaction(rr_req);
 }
 
 RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > HandTracker_stub::getImageHeader()
@@ -323,6 +339,47 @@ handler(0,RR_MAKE_SHARED<RobotRaconteur::RobotRaconteurRemoteException>(std::str
 return;
 }
 handler(rr_ret, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>());
+}
+void HandTracker_stub::async_start_recording(std::string record_name,boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout)
+{
+RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_req=RR_MAKE_SHARED<RobotRaconteur::MessageEntry>(RobotRaconteur::MessageEntryType_FunctionCallReq,"start_recording");
+rr_req->AddElement(RR_MAKE_SHARED<RobotRaconteur::MessageElement>("record_name",RobotRaconteur::rr_cast<RobotRaconteur::MessageElementData>(RobotRaconteur::stringToRRArray(record_name))));
+AsyncProcessTransaction(rr_req,boost::bind(&HandTracker_stub::rrend_start_recording, RobotRaconteur::rr_cast<HandTracker_stub>(shared_from_this()),_1,_2,rr_handler ),rr_timeout);
+}
+
+void HandTracker_stub::rrend_start_recording(RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, boost::function< void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > handler)
+{
+if (err)
+{
+handler(err);
+return;
+}
+if (m->Error != RobotRaconteur::MessageErrorType_None)
+{
+handler(RobotRaconteur::RobotRaconteurExceptionUtil::MessageEntryToException(m));
+return;
+}
+handler(RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>());
+}
+void HandTracker_stub::async_stop_recording(boost::function<void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout)
+{
+RR_SHARED_PTR<RobotRaconteur::MessageEntry> rr_req=RR_MAKE_SHARED<RobotRaconteur::MessageEntry>(RobotRaconteur::MessageEntryType_FunctionCallReq,"stop_recording");
+AsyncProcessTransaction(rr_req,boost::bind(&HandTracker_stub::rrend_stop_recording, RobotRaconteur::rr_cast<HandTracker_stub>(shared_from_this()),_1,_2,rr_handler ),rr_timeout);
+}
+
+void HandTracker_stub::rrend_stop_recording(RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, boost::function< void (RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > handler)
+{
+if (err)
+{
+handler(err);
+return;
+}
+if (m->Error != RobotRaconteur::MessageErrorType_None)
+{
+handler(RobotRaconteur::RobotRaconteurExceptionUtil::MessageEntryToException(m));
+return;
+}
+handler(RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>());
 }
 void HandTracker_stub::async_getImageHeader(boost::function<void (RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader >, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException>) > rr_handler, int32_t rr_timeout)
 {
@@ -611,6 +668,37 @@ rr_mr->AddElement(RR_MAKE_SHARED<RobotRaconteur::MessageElement>("return",RobotR
 return rr_mr;
 }
 }
+if (rr_m->MemberName == "start_recording")
+{
+std::string record_name =RobotRaconteur::RRArrayToString(rr_m->FindElement("record_name")->CastData<RobotRaconteur::RRArray<char> >());
+if (async_obj)
+{
+RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> rr_wp=RobotRaconteur::rr_cast<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel>(shared_from_this());
+async_obj->async_start_recording(record_name, boost::bind(&edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel::rr_start_recording,rr_wp, _1, rr_m, RobotRaconteur::ServerEndpoint::GetCurrentEndpoint()));
+return RR_SHARED_PTR<RobotRaconteur::MessageEntry>();
+}
+else
+{
+get_obj()->start_recording(record_name);
+rr_mr->AddElement("return",RobotRaconteur::ScalarToRRArray<int32_t>(0));
+return rr_mr;
+}
+}
+if (rr_m->MemberName == "stop_recording")
+{
+if (async_obj)
+{
+RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> rr_wp=RobotRaconteur::rr_cast<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel>(shared_from_this());
+async_obj->async_stop_recording(boost::bind(&edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel::rr_stop_recording,rr_wp, _1, rr_m, RobotRaconteur::ServerEndpoint::GetCurrentEndpoint()));
+return RR_SHARED_PTR<RobotRaconteur::MessageEntry>();
+}
+else
+{
+get_obj()->stop_recording();
+rr_mr->AddElement("return",RobotRaconteur::ScalarToRRArray<int32_t>(0));
+return rr_mr;
+}
+}
 if (rr_m->MemberName == "getImageHeader")
 {
 if (async_obj)
@@ -739,6 +827,48 @@ try
 RR_SHARED_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel1=skel.lock();
 if (!skel1) throw std::runtime_error("skel release");
 RR_SHARED_PTR<RobotRaconteur::MessageElement> mr=RR_MAKE_SHARED<RobotRaconteur::MessageElement>("return",RobotRaconteur::rr_cast<RobotRaconteur::MessageElementData>(RobotRaconteur::ScalarToRRArray<uint8_t >(ret)));
+EndAsyncCallFunction(skel, mr, err, m,ep);
+}
+catch (RobotRaconteur::RobotRaconteurException& err2)
+{
+EndAsyncCallFunction(skel,RR_SHARED_PTR<RobotRaconteur::MessageElement>(),RobotRaconteur::RobotRaconteurExceptionUtil::DownCastException(err2),m, ep);
+}
+catch (std::exception& err2)
+{
+EndAsyncCallFunction(skel,RR_SHARED_PTR<RobotRaconteur::MessageElement>(),RR_MAKE_SHARED<RobotRaconteur::DataTypeException>(err2.what()),m, ep);
+}
+}
+void HandTracker_skel::rr_start_recording(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep)
+{
+if(err)
+{
+EndAsyncCallFunction(skel,RR_SHARED_PTR<RobotRaconteur::MessageElement>(),err,m, ep);
+return;
+}
+try
+{
+RR_SHARED_PTR<RobotRaconteur::MessageElement> mr=RR_MAKE_SHARED<RobotRaconteur::MessageElement>("return",RobotRaconteur::ScalarToRRArray<int32_t>(0));
+EndAsyncCallFunction(skel, mr, err, m,ep);
+}
+catch (RobotRaconteur::RobotRaconteurException& err2)
+{
+EndAsyncCallFunction(skel,RR_SHARED_PTR<RobotRaconteur::MessageElement>(),RobotRaconteur::RobotRaconteurExceptionUtil::DownCastException(err2),m, ep);
+}
+catch (std::exception& err2)
+{
+EndAsyncCallFunction(skel,RR_SHARED_PTR<RobotRaconteur::MessageElement>(),RR_MAKE_SHARED<RobotRaconteur::DataTypeException>(err2.what()),m, ep);
+}
+}
+void HandTracker_skel::rr_stop_recording(RR_WEAK_PTR<edu::rpi::cats::sensors::kinect2_tracker::HandTracker_skel> skel, RR_SHARED_PTR<RobotRaconteur::RobotRaconteurException> err, RR_SHARED_PTR<RobotRaconteur::MessageEntry> m, RR_SHARED_PTR<RobotRaconteur::ServerEndpoint> ep)
+{
+if(err)
+{
+EndAsyncCallFunction(skel,RR_SHARED_PTR<RobotRaconteur::MessageElement>(),err,m, ep);
+return;
+}
+try
+{
+RR_SHARED_PTR<RobotRaconteur::MessageElement> mr=RR_MAKE_SHARED<RobotRaconteur::MessageElement>("return",RobotRaconteur::ScalarToRRArray<int32_t>(0));
 EndAsyncCallFunction(skel, mr, err, m,ep);
 }
 catch (RobotRaconteur::RobotRaconteurException& err2)

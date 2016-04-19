@@ -24,12 +24,15 @@ Kinect2_impl::Kinect2_impl() : edu::rpi::cats::sensors::kinect2_tracker::HandTra
 	this->right_depth_center = DepthSpacePoint();
 	this->right_center = CameraSpacePoint();
 
+	this->_recording = false;
+
 	t1 = boost::thread(boost::bind(&Kinect2_impl::backgroundPollingThread, this));
 
 }
 
 Kinect2_impl::~Kinect2_impl()
 {
+	stop_recording();
 	ShutdownKinect();
 	delete depth_image_data;
 	delete color_image_data;
@@ -137,6 +140,56 @@ uint8_t Kinect2_impl::DisableSensors()
 	}
 
 	return 1;
+}
+
+
+void Kinect2_impl::start_recording(std::string record_name)
+{
+	std::string folder_name = "./" + record_name + "_images";
+	boost::filesystem::path images_folder(folder_name);
+	if (boost::filesystem::create_directory(images_folder))
+		std::cout << "Saving images to folder " << folder_name << std::endl;
+
+	this->record_base = folder_name + "/" + record_name;
+	this->record_file = std::ofstream(this->record_base + ".csv");
+	this->record_idx = 0;
+	this->_recording = true;
+	this->record_t0 = boost::posix_time::microsec_clock::local_time();
+}
+
+void Kinect2_impl::stop_recording()
+{
+	this->_recording = false;
+
+	this->record_file.close();
+}
+
+void Kinect2_impl::write_data()
+{
+	boost::lock_guard<boost::mutex> guard(mtx_);
+
+	//cv::Mat color_image_mat = cv::Mat(this->color_image_height, this->color_image_width, CV_8UC4, this->color_image_data);
+	cv::Mat depth_image_mat = cv::Mat(this->depth_image_height, this->depth_image_width, CV_16UC1, this->depth_image_data);
+
+	std::stringstream ss;
+	std::string color_image_name, depth_image_name;
+
+	ss << this->record_base << "_color_" << this->record_idx << ".png";
+	ss >> color_image_name;
+	ss.clear();
+	ss << this->record_base << "_depth_" << this->record_idx << ".png";
+	ss >> depth_image_name;
+
+	//cv::imwrite(color_image_name, color_image_mat);
+	//cv::imwrite(depth_image_name, depth_image_mat);
+
+	boost::posix_time::time_duration t_elapsed = boost::posix_time::microsec_clock::local_time() - this->record_t0;
+
+	this->record_file << t_elapsed.total_microseconds() / 1000000.f;
+	this->record_file << ", " << this->left_center.X << ", " << this->left_center.Y << ", " << this->left_center.Z;
+	this->record_file << ", " << this->right_center.X << ", " << this->right_center.Y << ", " << this->right_center.Z << std::endl;
+
+	this->record_idx++;
 }
 
 RR_SHARED_PTR<edu::rpi::cats::sensors::camera_interface::ImageHeader > Kinect2_impl::getImageHeader()
@@ -253,7 +306,7 @@ int Kinect2_impl::FindHandCentersInColorImage()
 	cv::Mat thresh_resize;
 	cv::resize(color_image_hsv_thresh, thresh_resize, cv::Size(), 0.25, 0.25);
 	cv::imshow("thresh", thresh_resize);
-	cv::waitKey(30);
+	cv::waitKey(1);
 
 	// Detect connected components and stats about each particular label
 	cv::Mat cc_labels, cc_stats, cc_centroids;
@@ -303,7 +356,7 @@ int Kinect2_impl::FindHandCentersInColorImage()
 			i < cc_stats.at<int>(left_i, cv::CC_STAT_TOP) + cc_stats.at<int>(left_i, cv::CC_STAT_HEIGHT); i++)
 		{
 			for (int j = cc_stats.at<int>(left_i, cv::CC_STAT_LEFT);
-				j < cc_stats.at<int>(left_i, cv::CC_STAT_LEFT) + cc_stats.at<int>(left_i, cv::CC_STAT_LEFT); j++)
+				j < cc_stats.at<int>(left_i, cv::CC_STAT_LEFT) + cc_stats.at<int>(left_i, cv::CC_STAT_WIDTH); j++)
 			{
 				if (cc_labels.at<int>(i, j) == left_i)
 					this->left_color_points.push_back(cv::Point(j, i));
@@ -315,7 +368,7 @@ int Kinect2_impl::FindHandCentersInColorImage()
 			i < cc_stats.at<int>(right_i, cv::CC_STAT_TOP) + cc_stats.at<int>(right_i, cv::CC_STAT_HEIGHT); i++)
 		{
 			for (int j = cc_stats.at<int>(right_i, cv::CC_STAT_LEFT);
-				j < cc_stats.at<int>(right_i, cv::CC_STAT_LEFT) + cc_stats.at<int>(right_i, cv::CC_STAT_LEFT); j++)
+				j < cc_stats.at<int>(right_i, cv::CC_STAT_LEFT) + cc_stats.at<int>(right_i, cv::CC_STAT_WIDTH); j++)
 			{
 				if (cc_labels.at<int>(i, j) == right_i)
 					this->right_color_points.push_back(cv::Point(j, i));
@@ -357,8 +410,8 @@ int Kinect2_impl::MapHandCentersToDepthImage()
 int Kinect2_impl::MapBlobsToCameraSpace()
 {
 
-	this->left_center = CameraSpacePoint();
-	this->right_center = CameraSpacePoint();
+	CameraSpacePoint left_center_cs = CameraSpacePoint();
+	CameraSpacePoint right_center_cs = CameraSpacePoint();
 	int n_points = this->left_color_points.size();
 
 	for (int i = 0; i < this->left_color_points.size(); i++)
@@ -366,19 +419,25 @@ int Kinect2_impl::MapBlobsToCameraSpace()
 		int k = (UINT)(this->left_color_points.at(i).y) * (UINT)(this->color_image_width) + (UINT)this->left_color_points.at(i).x;
 		if (this->color_points_in_camera_frame[k].Z >= 0.4 && this->color_points_in_camera_frame[k].Z <= 4)
 		{
-			this->left_center.X += this->color_points_in_camera_frame[k].X;
-			this->left_center.Y += this->color_points_in_camera_frame[k].Y;
-			this->left_center.Z += this->color_points_in_camera_frame[k].Z;
+			left_center_cs.X += this->color_points_in_camera_frame[k].X;
+			left_center_cs.Y += this->color_points_in_camera_frame[k].Y;
+			left_center_cs.Z += this->color_points_in_camera_frame[k].Z;
 		}
 		else
 			n_points--;
 	}
 
 	if (n_points == 0)
+	{
+		this->left_center = CameraSpacePoint();
 		return -1;
-	this->left_center.X /= n_points;
-	this->left_center.Y /= n_points;
-	this->left_center.Z /= n_points;
+	}
+	else
+	{
+		this->left_center.X = left_center_cs.X / n_points;
+		this->left_center.Y = left_center_cs.Y / n_points;
+		this->left_center.Z = left_center_cs.Z / n_points;
+	}
 
 	n_points = this->right_color_points.size();
 	for (int i = 0; i < this->right_color_points.size(); i++)
@@ -386,20 +445,25 @@ int Kinect2_impl::MapBlobsToCameraSpace()
 		int k = (UINT)(this->right_color_points.at(i).y) * (UINT)(this->color_image_width) + (UINT)this->right_color_points.at(i).x;
 		if (this->color_points_in_camera_frame[k].Z >= 0.4 && this->color_points_in_camera_frame[k].Z <= 4)
 		{
-			this->right_center.X += this->color_points_in_camera_frame[k].X;
-			this->right_center.Y += this->color_points_in_camera_frame[k].Y;
-			this->right_center.Z += this->color_points_in_camera_frame[k].Z;
+			right_center_cs.X += this->color_points_in_camera_frame[k].X;
+			right_center_cs.Y += this->color_points_in_camera_frame[k].Y;
+			right_center_cs.Z += this->color_points_in_camera_frame[k].Z;
 		}
 		else
 			n_points--;
 	}
 
 	if (n_points == 0)
+	{
+		this->right_center = CameraSpacePoint();
 		return -1;
-
-	this->right_center.X /= n_points;
-	this->right_center.Y /= n_points;
-	this->right_center.Z /= n_points;
+	}
+	else
+	{
+		this->right_center.X = right_center_cs.X / n_points;
+		this->right_center.Y = right_center_cs.Y / n_points;
+		this->right_center.Z = right_center_cs.Z / n_points;
+	}
 
 	return 0;
 }
@@ -493,7 +557,8 @@ void Kinect2_impl::MultiSourceFrameArrived(IMultiSourceFrameArrivedEventArgs* pA
 				this->right_center = CameraSpacePoint();
 			}
 		}
-
+		if (this->_recording)
+			this->write_data();
 	}
 
 }
